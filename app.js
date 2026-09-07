@@ -103,16 +103,21 @@
   // 반환하는 프로미스는 uploadToSite의 결과를 그대로 넘기므로(꺼져있거나 실패하면 null),
   // 완료를 기다리고 싶은 호출부(await backupToDrive(...))나 실패를 사용자에게 알려야 하는 곳
   // (예: 지적사항 사진)에서 쓸 수 있고, 정말 기다릴 필요 없는 곳은 그냥 호출만 하고 무시해도 안전하다.
-  // sobang1004(소방점검 관리)와 같은 구글 드라이브 계정/프록시를 공유하므로, "이행완료보고서"를
-  // 제외한 카테고리는 이름 앞에 이 앱 전용 태그를 붙여 같은 이름의 거래처가 있어도 파일 경로가
-  // 서로 섞이지 않게 한다. "이행완료보고서"만 그대로 두는 이유: "보고서 모아보기" 화면이 쓰는
-  // 구글 드라이브 프록시의 list-reports가 이 카테고리 이름을 그대로 찾는 것으로 보여서, 태그를
-  // 붙이면 오히려 이 앱에서 생성한 보고서가 목록에 아예 안 뜰 위험이 있다(업로드/조회 양쪽을
-  // 다 통제할 수 없는 외부 프록시라 안전한 쪽으로 둠) - 두 앱의 보고서가 섞여 보이는 정도만 감수.
+  // sobang1004(소방점검 관리)와 같은 구글 드라이브 계정/프록시를 공유하고, 이 앱 안에서도 여러
+  // 소방공사업체(회사)가 계정만 나눠 함께 쓰므로, 카테고리 이름 앞에 "앱_회사" 태그를 붙여
+  // 같은 이름의 거래처가 있어도(다른 앱이든, 같은 앱의 다른 회사든) 파일 경로가 섞이지 않게 한다.
+  // "이행완료보고서"만 예외로 카테고리는 그대로 두고 회사 태그를 파일명 쪽에 붙인다 - "보고서
+  // 모아보기" 화면이 쓰는 구글 드라이브 프록시의 list-reports가 이 카테고리 이름을 그대로 찾는
+  // 것으로 보여서, 카테고리에 태그를 붙이면 이 앱에서 생성한 보고서가 목록에 아예 안 뜰 위험이
+  // 있다(업로드/조회 양쪽을 다 통제할 수 없는 외부 프록시라 안전한 쪽으로 둠) - 대신 파일명에
+  // 붙인 회사 태그로 renderReportsHub에서 다른 회사 보고서를 걸러낸다.
   const DRIVE_APP_TAG = "찰칵보고서";
+  function companyDriveTag() {
+    return (window.Auth && Auth.getCompanyId && Auth.getCompanyId()) || "미지정회사";
+  }
   function backupToDrive(siteId, category, filename, blob) {
     if (!blob) return Promise.resolve(null);
-    const taggedCategory = category === "이행완료보고서" ? category : `${DRIVE_APP_TAG}_${category}`;
+    const taggedCategory = category === "이행완료보고서" ? category : `${DRIVE_APP_TAG}_${companyDriveTag()}_${category}`;
     return (siteId ? FireDB.getSite(siteId) : Promise.resolve(null))
       .then((site) => DriveBackup.uploadToSite(site ? site.name : null, taggedCategory, filename, blob))
       .catch(() => null);
@@ -136,7 +141,7 @@
     });
     if (missing.length === 0) return;
     await Promise.all(missing.map(async ({ id, prefix, role, def }) => {
-      const blob = await DriveBackup.fetchFile(site.name, `${DRIVE_APP_TAG}_지적사항_사진`, `${prefix}_${id}.jpg`);
+      const blob = await DriveBackup.fetchFile(site.name, `${DRIVE_APP_TAG}_${companyDriveTag()}_지적사항_사진`, `${prefix}_${id}.jpg`);
       if (!blob) return;
       photoMap.set(id, { id, blob });
       FireDB.addPhoto({ id, siteId, itemId: def.id, role, blob, createdAt: new Date().toISOString() }).catch(() => {});
@@ -1116,7 +1121,7 @@
       }
       {
         const guessName = (result.fields && result.fields.name) || file.name.replace(/\.[^.]+$/, "");
-        driveBackupPromise = DriveBackup.uploadToSite(guessName, `${DRIVE_APP_TAG}_거래처_등록자료`, file.name, file).catch(() => null);
+        driveBackupPromise = DriveBackup.uploadToSite(guessName, `${DRIVE_APP_TAG}_${companyDriveTag()}_거래처_등록자료`, file.name, file).catch(() => null);
       }
       if (result.unsupported) {
         toast(`지원하지 않는 파일 형식입니다 (.xlsx, .docx, .pdf, .hwp, .hwpx, 사진).`, "error");
@@ -1325,6 +1330,10 @@
       list.innerHTML = `<div class="empty-state">보고서 목록을 불러오지 못했습니다.<br>네트워크를 확인해주세요.</div>`;
       return;
     }
+    // list-reports는 이 구글 드라이브 계정을 쓰는 모든 앱/회사의 보고서를 구분 없이 돌려주므로,
+    // 파일명에 붙은 이 회사 태그([companyId])로 우리 회사 보고서만 걸러서 보여준다.
+    const companyPrefix = `[${companyDriveTag()}]`;
+    files = files.filter((f) => f.name.startsWith(companyPrefix));
     if (files.length === 0) {
       list.innerHTML = `<div class="empty-state">아직 생성된 이행완료보고서가 없습니다.</div>`;
       return;
@@ -1332,7 +1341,7 @@
     list.innerHTML = files.map((f) => `
       <div class="report-row" data-id="${f.id}" data-name="${escapeHtml(f.name)}">
         <span class="report-row-site">${escapeHtml(f.siteName)}</span>
-        <span class="report-row-file">${escapeHtml(f.name)}</span>
+        <span class="report-row-file">${escapeHtml(f.name.slice(companyPrefix.length))}</span>
       </div>
     `).join("");
     $$("#reportsHubList .report-row").forEach((el) => {
@@ -1341,7 +1350,8 @@
         el.classList.add("report-row-loading");
         try {
           const blob = await DriveBackup.downloadFile(el.dataset.id);
-          const name = el.dataset.name;
+          const rawName = el.dataset.name;
+          const name = rawName.startsWith(`[${companyDriveTag()}]`) ? rawName.slice(`[${companyDriveTag()}]`.length) : rawName;
           const mimeType = name.toLowerCase().endsWith(".pdf") ? "application/pdf" : "application/hwp+zip";
           await shareOrDownloadFile(blob, name, mimeType);
         } catch (err) {
@@ -2027,7 +2037,7 @@
     const site = await FireDB.getSite(round.siteId);
     if (!site || !site.name) return;
     await Promise.all(missing.map(async (d) => {
-      const blob = await DriveBackup.fetchFile(site.name, `${DRIVE_APP_TAG}_관련서류`, roundDocumentDriveFilename(d));
+      const blob = await DriveBackup.fetchFile(site.name, `${DRIVE_APP_TAG}_${companyDriveTag()}_관련서류`, roundDocumentDriveFilename(d));
       if (!blob) return;
       const doc = { id: d.id, roundId: round.id, siteId: round.siteId, filename: d.filename, size: d.size, blob, createdAt: d.createdAt };
       docsMap.set(d.id, doc);
@@ -2493,7 +2503,7 @@
       await backupToDrive(
         lastCompletionReportData.site ? lastCompletionReportData.site.id : null,
         "이행완료보고서",
-        `이행완료보고서_${lastCompletionReportData.siteName}_${todayISO()}.hwpx`,
+        `[${companyDriveTag()}]이행완료보고서_${lastCompletionReportData.siteName}_${todayISO()}.hwpx`,
         blob
       );
       // 앱(APK) 안의 WebView는 <a download>로 조용히 다운로드하는 게 안 보이거나 그냥 안 될 때가
@@ -2634,15 +2644,18 @@
     let driveBackupPromise = Promise.resolve(null);
     try {
       const filenameBase = `이행완료보고서_${lastCompletionReportData.siteName}`;
+      // 구글 드라이브에는 회사 태그를 붙인 이름으로 올려서 "보고서 모아보기"가 다른 회사
+      // 보고서와 섞이지 않게 걸러낼 수 있게 한다 - 사용자가 직접 받는 파일명은 태그 없이 깔끔하게 둔다.
+      const driveFilenameBase = `[${companyDriveTag()}]${filenameBase}`;
       const siteId = lastCompletionReportData.site ? lastCompletionReportData.site.id : null;
       if (format === "hwpx") {
         const blob = await HwpxExport.generateCompletionReportHwpx(lastCompletionReportData);
-        driveBackupPromise = backupToDrive(siteId, "이행완료보고서", `${filenameBase}_${todayISO()}.hwpx`, blob);
+        driveBackupPromise = backupToDrive(siteId, "이행완료보고서", `${driveFilenameBase}_${todayISO()}.hwpx`, blob);
         btn.textContent = "공유 화면 여는 중...";
         await shareOrDownloadFile(blob, `${filenameBase}.hwpx`, "application/hwp+zip");
       } else {
         const blob = await generateCompletionReportPdfBlob();
-        driveBackupPromise = backupToDrive(siteId, "이행완료보고서", `${filenameBase}_${todayISO()}.pdf`, blob);
+        driveBackupPromise = backupToDrive(siteId, "이행완료보고서", `${driveFilenameBase}_${todayISO()}.pdf`, blob);
         btn.textContent = "공유 화면 여는 중...";
         await shareOrDownloadFile(blob, `${filenameBase}.pdf`, "application/pdf");
       }
@@ -2748,7 +2761,7 @@
       const zip = new JSZip();
       zip.file("backup.json", JSON.stringify(data, null, 2));
       const blob = await zip.generateAsync({ type: "blob" });
-      const filename = `${DRIVE_APP_TAG}_${backupFilenameDate()}.zip`;
+      const filename = `${DRIVE_APP_TAG}_${companyDriveTag()}_${backupFilenameDate()}.zip`;
       await DriveBackup.uploadBackup(filename, blob);
       $("#backupStatus").textContent = `마지막 백업: ${filename}`;
       toast(`백업 완료: ${filename} (구글 드라이브에 저장됨)`, "success");
@@ -2773,9 +2786,9 @@
     btn.textContent = "복구 중...";
     $("#backupStatus").textContent = "";
     try {
-      // 같은 구글 드라이브 계정을 다른 앱(소방점검 관리 등)과 함께 쓰므로, 이 앱(찰칵보고서)
-      // 태그가 붙은 백업 파일만 걸러서 그중 가장 최근 것을 고른다.
-      const backups = (await DriveBackup.listBackups()).filter((f) => f.name.startsWith(`${DRIVE_APP_TAG}_`));
+      // 같은 구글 드라이브 계정을 다른 앱(소방점검 관리 등) 및 이 앱을 함께 쓰는 다른 회사와도
+      // 공유하므로, 이 앱+이 회사 태그가 붙은 백업 파일만 걸러서 그중 가장 최근 것을 고른다.
+      const backups = (await DriveBackup.listBackups()).filter((f) => f.name.startsWith(`${DRIVE_APP_TAG}_${companyDriveTag()}_`));
       if (backups.length === 0) {
         toast("구글 드라이브에 백업 파일이 없습니다.", "error");
         return;
