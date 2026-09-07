@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>찰칵보고서</title>
+<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
+<link rel="stylesheet" href="style.css?v=20260907-2141">
+</head>
+<body>
+<!-- 스크립트 실행 도중 어디선가 예외가 나면 그 뒤의 코드(버튼 연결 등)가 통째로 실행되지
+     않아 "여기저기 눌러도 반응 없음"처럼 보일 수 있다 - 콘솔을 볼 수 없는 실사용 환경에서도
+     원인을 바로 알 수 있도록, 화면에 직접 에러를 띄운다. 반드시 다른 <script> 태그보다 먼저. -->
+<div id="fatalErrorBanner" class="fatal-error-banner hidden"></div>
+<script>
+(function () {
+  function show(msg) {
+    var el = document.getElementById("fatalErrorBanner");
+    if (!el) return;
+    el.textContent = "오류가 발생했습니다: " + msg + "\n(이 문구를 그대로 캡처해서 알려주세요)";
+    el.classList.remove("hidden");
+  }
+  window.addEventListener("error", function (e) {
+    show((e.message || "알 수 없는 오류") + " (" + (e.filename || "") + ":" + (e.lineno || "?") + ")");
+  });
+  window.addEventListener("unhandledrejection", function (e) {
+    var reason = e.reason;
+    show((reason && (reason.message || reason)) || "알 수 없는 오류(Promise)");
+  });
+})();
+</script>
+<div id="bootLoading" class="boot-loading">
+  <div class="boot-loading-spinner"></div>
+  <div class="boot-loading-text">불러오는 중...</div>
+</div>
+<div id="loginGate" class="login-gate hidden">
+  <div class="login-box">
+    <h1><span class="brand-main login-brand-main">찰칵</span><span class="brand-sub login-brand-sub">보고서</span></h1>
+    <div class="field"><span>아이디</span><input type="text" id="loginUsername" autocomplete="username"></div>
+    <div class="field"><span>비밀번호</span><input type="password" id="loginPassword" autocomplete="current-password"></div>
+    <div id="loginError" class="login-error hidden">아이디 또는 비밀번호가 올바르지 않습니다.</div>
+    <button class="btn btn-primary btn-large" id="btnLogin" type="button">로그인</button>
+  </div>
+</div>
+<header class="app-header" id="appHeader">
+  <button class="header-btn header-btn-back" id="btnHeaderBack" type="button">← 뒤로</button>
+  <h1 id="appHeaderTitle"><span class="brand-main">찰칵</span><span class="brand-sub">보고서</span></h1>
+  <button class="header-btn header-btn-home" id="btnHeaderHome" type="button">처음으로</button>
+</header>
+
+<div id="toastContainer" class="toast-container no-print"></div>
+
+<div id="importLoadingOverlay" class="import-loading-overlay hidden no-print">
+  <div class="import-loading-box">
+    <div class="boot-loading-spinner"></div>
+    <div class="import-loading-text" id="importLoadingText">자료를 분석하고 있습니다.<br>잠시만 기다려주세요.</div>
+    <div class="import-loading-bar-track"><div class="import-loading-bar-fill" id="importLoadingBarFill"></div></div>
+    <div class="import-loading-percent" id="importLoadingPercent">0%</div>
+  </div>
+</div>
+
+<div id="confirmModal" class="modal-overlay hidden no-print">
+  <div class="modal-box">
+    <div id="confirmMessage" class="modal-message"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" id="confirmCancelBtn">취소</button>
+      <button class="btn btn-primary" id="confirmOkBtn">확인</button>
+    </div>
+  </div>
+</div>
+
+<div id="shareFormatModal" class="modal-overlay hidden no-print">
+  <div class="modal-box">
+    <div class="modal-message">어떤 형식으로 공유할까요?</div>
+    <div class="modal-actions modal-actions-col">
+      <button class="btn btn-primary" id="shareFormatPdfBtn">PDF로 공유</button>
+      <button class="btn btn-primary" id="shareFormatHwpxBtn">한글(HWPX)로 공유</button>
+      <button class="btn btn-secondary" id="shareFormatCancelBtn">취소</button>
+    </div>
+  </div>
+</div>
+
+<div id="roundDateModal" class="modal-overlay hidden no-print">
+  <div class="modal-box">
+    <div class="modal-message" id="roundDateModalTitle">점검 날짜 선택</div>
+    <input type="date" id="roundDateInput" class="round-date-input">
+    <div class="modal-actions">
+      <button class="btn btn-secondary" id="roundDateCancelBtn">취소</button>
+      <button class="btn btn-primary" id="roundDateOkBtn">확인</button>
+    </div>
+  </div>
+</div>
+
+<div id="fileUploadModal" class="modal-overlay hidden no-print">
+  <div class="modal-box">
+    <div class="modal-message">지적사항 자료 올리기</div>
+    <div class="file-drop-zone" id="fileUploadDropZone">
+      <div class="file-drop-zone-text">여기로 파일을 끌어다 놓거나</div>
+      <button class="btn btn-primary" id="fileUploadBrowseBtn" type="button">파일 선택</button>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" id="fileUploadCancelBtn">취소</button>
+    </div>
+  </div>
+</div>
+
+<!-- 회차(점검 날짜) 관련서류 - 지적사항 자료와 별개로 계약서/허가서 등 파일을 올려두고 다운로드할 수 있게 한다 -->
+<div id="roundDocumentsModal" class="modal-overlay hidden no-print">
+  <div class="modal-box">
+    <div class="modal-message">관련서류</div>
+    <div id="roundDocumentsList" class="round-documents-list"></div>
+    <button class="btn btn-secondary" id="btnUploadRoundDocument" type="button">📎 파일 업로드</button>
+    <input type="file" id="roundDocumentInput" multiple class="hidden">
+    <div class="modal-actions">
+      <button class="btn btn-primary" id="btnCloseRoundDocuments">닫기</button>
+    </div>
+  </div>
+</div>
+
+<div id="app">
+
+  <!-- 홈 (첫 화면) -->
+  <section id="screen-home" class="screen home-screen">
+    <div class="home-grid">
+      <button class="home-tile" id="btnHomeDeficiency">
+        <span class="home-tile-icon">📌</span>
+        <span class="home-tile-label">지적사항</span>
+      </button>
+      <button class="home-tile" id="btnHomeSettings">
+        <span class="home-tile-icon">⚙️</span>
+        <span class="home-tile-label">설정</span>
+      </button>
+    </div>
+    <div id="appVersionTag" class="app-version-tag"></div>
+  </section>
+
+  <!-- 현장 등록/수정 -->
+  <section id="screen-site-form" class="screen">
+    <div class="card">
+      <h2 id="siteFormTitle">거래처 추가</h2>
+      <div id="importSummary" class="hint-text hidden"></div>
+      <div class="field"><span>대상물명칭(상호) *</span><input type="text" id="siteName" placeholder="예: 그린빌딩"></div>
+      <div class="field"><span>대상물 구분</span><input type="text" id="siteBuildingType" placeholder="예: 근린생활시설"></div>
+      <div class="field-row">
+        <div class="field"><span>관계인 성명</span><input type="text" id="siteContactName"></div>
+        <div class="field"><span>관계인 전화번호</span><input type="text" id="siteContactPhone" placeholder="010-0000-0000"></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><span>소방안전관리자 성명</span><input type="text" id="siteFireManagerName"></div>
+        <div class="field"><span>소방안전관리자 전화번호</span><input type="text" id="siteFireManagerPhone" placeholder="010-0000-0000"></div>
+      </div>
+      <div class="field"><span>소재지</span><input type="text" id="siteAddress" placeholder="예: 서울시 강남구 ..."></div>
+      <input type="text" id="siteFireStation" class="hidden">
+      <input type="text" id="siteStation119" class="hidden">
+
+      <button class="btn btn-primary" id="btnSaveSite">저장</button>
+      <button class="btn btn-secondary" id="btnCancelSiteForm">취소</button>
+    </div>
+  </section>
+
+  <!-- 지적사항 전체 관리 (업체별) -->
+  <section id="screen-deficiency-hub" class="screen">
+    <div class="card">
+      <h2>지적사항 / 이행완료 관리</h2>
+      <div class="hint-text">직접 입력하거나 자료를 올려서 새 거래처를 등록하고, 현장(업체)을 선택하면 그 현장의 지적사항을 한곳에서 관리할 수 있습니다.</div>
+    </div>
+    <button class="btn btn-primary btn-large" id="btnEntryManual">✏️ 직접 입력</button>
+    <button class="btn btn-secondary btn-large" id="btnEntryImport">📎 업체 자료 올리기</button>
+    <h2 class="list-heading">등록된 거래처</h2>
+    <div class="sort-toolbar">
+      <button class="sort-btn active" id="btnDefSortByName">가나다순</button>
+      <button class="sort-btn" id="btnDefSortByRecent">최신순</button>
+      <button class="sort-btn" id="btnDefSortByRegion">지역별</button>
+    </div>
+    <div class="filter-toolbar" id="defFilterToolbar">
+      <button type="button" class="filter-chip" data-filter="pending">검토중</button>
+      <button type="button" class="filter-chip" data-filter="none">지적사항 없음</button>
+      <button type="button" class="filter-chip" data-filter="open">미해결</button>
+      <button type="button" class="filter-chip" data-filter="resolved">해결</button>
+    </div>
+    <div id="deficiencyHubList"></div>
+  </section>
+
+  <!-- 보고서 모아보기 -->
+  <section id="screen-reports-hub" class="screen">
+    <div class="card">
+      <h2>📄 보고서 모아보기</h2>
+      <div class="hint-text">지금까지 만든 이행완료보고서입니다. 눌러서 열거나 공유할 수 있습니다.</div>
+    </div>
+    <div id="reportsHubList"></div>
+  </section>
+
+  <!-- 지적사항 회차 목록 (업체별 - 방문 날짜마다 하나씩) -->
+  <section id="screen-deficiency-rounds" class="screen">
+    <div class="card" id="deficiencyRoundsHeader"></div>
+    <button class="btn btn-primary btn-large" id="btnAddRound">+ 등록</button>
+    <button class="btn btn-danger" id="btnDeleteAllSiteDeficiencies">🗑 모든 지적 내역 삭제</button>
+    <div id="deficiencyRoundsList"></div>
+    <button class="btn btn-secondary" id="btnBackFromRounds">← 뒤로</button>
+  </section>
+
+  <!-- 지적사항 관리 (회차 하나 안의 지적사항 목록/편집) -->
+  <section id="screen-deficiencies" class="screen">
+    <div class="card" id="deficiencyHeader"></div>
+    <div class="section-actions deficiency-toolbar">
+      <button class="btn btn-primary" id="btnAddDeficiency">+ 직접 추가</button>
+      <button class="btn btn-secondary" id="btnImportData">📎 지적사항 자료 올리기</button>
+      <button class="btn btn-danger" id="btnDeleteAllDeficiencies">🗑 지적사항 내역 전체삭제</button>
+      <button class="btn btn-secondary" id="btnOpenRoundDocuments" type="button">📁 관련서류 등록</button>
+      <button class="btn btn-secondary" id="btnMarkRoundNoDeficiency">지적사항 없음</button>
+    </div>
+    <div id="deficienciesList"></div>
+    <div class="completion-date-range">
+      <span class="completion-date-range-label">이행조치 일자</span>
+      <div class="completion-date-range-row">
+        <button type="button" class="completion-date-btn" id="btnCompletionDateStart"></button>
+        <span class="completion-date-tilde">~</span>
+        <button type="button" class="completion-date-btn" id="btnCompletionDateEnd"></button>
+      </div>
+    </div>
+    <button class="btn btn-primary btn-large" id="btnGenerateCompletionReport">이행완료 보고서 생성</button>
+    <button class="btn btn-secondary" id="btnBackFromDeficiencies">← 뒤로</button>
+  </section>
+
+  <!-- 이행완료 보고서 -->
+  <section id="screen-completion-report" class="screen">
+    <div class="report-toolbar no-print">
+      <button class="btn btn-secondary" id="btnBackFromCompletionReport">← 목록으로</button>
+      <button class="btn btn-primary" id="btnPrintCompletionReport">인쇄 / PDF 저장</button>
+      <button class="btn btn-secondary" id="btnDownloadCompletionHwpx">한글(HWPX) 다운로드</button>
+      <button class="btn btn-secondary" id="btnShareCompletionReport">공유</button>
+    </div>
+    <div id="completionReportContent"></div>
+    <div class="report-pager no-print" id="completionReportPager">
+      <button class="btn btn-secondary" id="btnCompletionPrevPage">◀ 이전</button>
+      <span id="completionPageIndicator">1 / 1</span>
+      <button class="btn btn-secondary" id="btnCompletionNextPage">다음 ▶</button>
+    </div>
+  </section>
+
+  <!-- 설정 -->
+  <section id="screen-settings" class="screen">
+    <div class="card">
+      <h2>📱 앱 버전</h2>
+      <p id="appVersionText" class="hint-text"></p>
+    </div>
+    <div class="card">
+      <h2>소방공사업체 정보</h2>
+      <div class="field"><span>업체명</span><input type="text" id="companyName"></div>
+      <div class="field-row">
+        <div class="field"><span>사업자 등록번호</span><input type="text" id="companyBizRegNo" placeholder="000-00-00000"></div>
+        <div class="field"><span>대표이사 성명</span><input type="text" id="companyCeo" placeholder="예: 홍길동"></div>
+      </div>
+      <div class="field"><span>전화번호</span><input type="text" id="companyPhone" placeholder="010-0000-0000"></div>
+      <div class="field"><span>소재지</span><input type="text" id="companyAddress"></div>
+      <button class="btn btn-secondary" id="btnSaveCompany">저장</button>
+    </div>
+    <div class="card">
+      <h2>🤖 AI 자동 인식</h2>
+      <div class="hint-text">파일(PDF·엑셀·워드·한글·HWPX·사진)을 업로드할 때 AI가 내용을 분석해서 입력칸에 자동으로 채워줍니다. 별도 로그인/키 입력 없이 항상 동작하며, 끄면 기존 방식(자체 인식)으로만 동작합니다.</div>
+      <label class="setting-toggle-row">
+        <input type="checkbox" id="aiEnabledToggle">
+        <span>AI 자동 인식 사용</span>
+      </label>
+    </div>
+    <div class="card">
+      <h2>☁️ 구글 드라이브 자동 저장</h2>
+      <div class="hint-text">업로드하는 자료(업체 등록 파일, 지적사항 자료, 사진, 관련서류)와 생성되는 이행완료보고서가 회사 구글 드라이브에 현장별로 자동 저장됩니다. 별도 로그인 없이, 이 앱을 사용하는 누구의 업로드든 같은 곳에 모입니다.</div>
+      <label class="setting-toggle-row">
+        <input type="checkbox" id="driveEnabledToggle">
+        <span>자동 저장 사용</span>
+      </label>
+    </div>
+    <div class="card">
+      <h2>📷 지적사항 사진 촬영</h2>
+      <div class="hint-text">지적사항 사진을 촬영할 때, 찍은 사진을 휴대폰 갤러리에도 저장할지 설정합니다. 꺼도 앱 안에는 정상적으로 저장됩니다.</div>
+      <label class="setting-toggle-row">
+        <input type="checkbox" id="photoSaveToGalleryToggle">
+        <span>촬영한 사진 휴대폰에 저장</span>
+      </label>
+    </div>
+    <div class="card">
+      <h2>💾 자료 백업</h2>
+      <div class="hint-text">거래처·지적사항 등 텍스트 자료를 zip으로 묶어 구글 드라이브에 저장합니다(사진은 이미 각자 자동 저장되므로 제외). 파일명은 백업한 날짜(예: 20260817.zip)입니다.</div>
+      <button class="btn btn-secondary" id="btnDataBackup" type="button">지금 백업하기</button>
+      <button class="btn btn-secondary" id="btnDataRestore" type="button">최근 백업으로 복구</button>
+      <p id="backupStatus" class="status-text"></p>
+    </div>
+    <div class="card" id="authSettingsCard">
+      <h2>🔒 로그인 계정</h2>
+      <div class="hint-text">이 자료(거래처·지적사항)는 로그인한 사람 누구나 함께 보고 입력할 수 있는 공용 자료입니다.</div>
+      <div class="field"><span>현재 로그인</span><span id="authCurrentUser" class="field-static"></span></div>
+      <button class="btn btn-secondary" id="btnAuthLogout">로그아웃</button>
+    </div>
+  </section>
+
+</div>
+
+<nav class="tab-bar no-print">
+  <button class="tab-btn" data-tab="screen-deficiency-hub"><span class="tab-btn-icon">📌</span><span class="tab-btn-label">지적사항</span></button>
+  <button class="tab-btn" data-tab="screen-reports-hub"><span class="tab-btn-icon">📄</span><span class="tab-btn-label">보고서</span></button>
+  <button class="tab-btn" data-tab="screen-settings"><span class="tab-btn-icon">⚙️</span><span class="tab-btn-label">설정</span></button>
+</nav>
+
+<input type="file" id="dataImportInput" accept=".xlsx,.xls,.docx,.pdf,.hwpx,.hwp,.jpg,.jpeg,.png,.webp,.bmp" class="hidden">
+<input type="file" id="clientImportInput" accept=".xlsx,.xls,.docx,.pdf,.hwpx,.hwp,.jpg,.jpeg,.png,.webp,.bmp" class="hidden">
+<datalist id="categoryList"></datalist>
+
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-database-compat.js"></script>
+<!-- 로컬 JS/CSS는 ?v=로 캐시를 무효화한다 - GitHub Pages는 파일이 바뀌어도 브라우저가 예전 캐시를
+     그대로 쓰는 경우가 있어(휴대폰 앱은 새로 설치/업데이트되며 새 파일을 받지만, PC 브라우저는 탭을
+     오래 열어두거나 캐시가 안 갱신되면 예전 코드가 계속 실행됨 - 실제로 사용자가 "이행완료보고서
+     사진이 이상하게 나온다"는, 이미 고쳐서 배포한 버그를 PC에서만 계속 겪은 원인이었다) - 배포마다
+     이 값을 version.js의 APP_VERSION과 함께 갱신해야 한다. -->
+<script src="firebase-config.js"></script>
+<script src="version.js?v=20260907-2141"></script>
+<script src="auth.js?v=20260907-2141"></script>
+<script src="db.js?v=20260907-2141"></script>
+<script src="ui.js?v=20260907-2141"></script>
+<script src="import.js?v=20260907-2141"></script>
+<script src="client-import.js?v=20260907-2141"></script>
+<script src="ai-fill.js?v=20260907-2141"></script>
+<script src="hwpx-export.js?v=20260907-2141"></script>
+<script src="drive.js?v=20260907-2141"></script>
+<script src="app.js?v=20260907-2141"></script>
+</body>
+</html>
