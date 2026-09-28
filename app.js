@@ -1612,11 +1612,16 @@
 
   // 거래처 상세에서 "방문 완료 처리"를 누른 날짜를, 지적사항 메뉴에도 같은 날짜의 회차로 자동
   // 만들어준다(사용자 요청) - 방문을 마쳤으면 보통 그 자리에서 지적사항도 확인하므로, "+ 새 점검
+  // 거래처 입력 후 "다음"을 누르면 회차 목록("+ 등록" 화면)을 거치지 않고 바로 지적사항
+  // 화면(직접 추가/자료 올리기/전체삭제)으로 간다(사용자 요청, 2026-09-28). 오늘 날짜 회차가
+  // 이미 있으면 그걸 이어서 쓰고, 없으면 오늘 날짜로 새로 만든다.
   async function openSiteRounds(siteId) {
     currentDeficiencySiteId = siteId;
-    await ensureRoundsForSite(siteId);
-    await renderDeficiencyRounds();
-    showScreen("screen-deficiency-rounds");
+    const rounds = await ensureRoundsForSite(siteId);
+    const today = todayISO();
+    let round = rounds.find((r) => r.date === today);
+    if (!round) round = await FireDB.addRound({ siteId, date: today, label: "", createdAt: new Date().toISOString() });
+    await openRoundDeficiencies(siteId, round.id);
   }
 
   async function renderDeficiencyRounds() {
@@ -1979,9 +1984,10 @@
     await renderDeficiencies();
   }
 
+  // 회차 목록 화면을 더 이상 거치지 않으므로 뒤로가기는 지적사항 첫 화면으로 돌아간다.
   $("#btnBackFromDeficiencies").addEventListener("click", async () => {
-    await renderDeficiencyRounds();
-    showScreen("screen-deficiency-rounds");
+    await renderDeficiencyHub();
+    showScreen("screen-deficiency-hub");
   });
 
   $("#btnAddDeficiency").addEventListener("click", async () => {
@@ -2093,7 +2099,7 @@
     });
   }
 
-  $("#btnOpenRoundDocuments").addEventListener("click", async () => {
+  $("#btnOpenRoundDocuments")?.addEventListener("click", async () => {
     await renderRoundDocuments();
     $("#roundDocumentsModal").classList.remove("hidden");
   });
@@ -2141,7 +2147,7 @@
   // 쓰므로, 다른 회차(옛 회차·새 회차)의 표시에는 영향을 주지 않는다. 최신 회차일 때만 지적사항
   // 메인메뉴의 업체 배지에도 곧바로 "지적사항 없음"으로 반영된다(latestRoundCountsBySite가 최신
   // 회차 기준으로 보기 때문).
-  $("#btnMarkRoundNoDeficiency").addEventListener("click", async () => {
+  $("#btnMarkRoundNoDeficiency")?.addEventListener("click", async () => {
     if (currentDeficiencies.length > 0) {
       toast("이미 등록된 지적사항이 있습니다. 먼저 삭제한 뒤 이용해주세요.", "error");
       return;
