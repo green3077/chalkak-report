@@ -1585,10 +1585,13 @@
     list: "deficiencyHubList", filterToolbar: "defFilterToolbar",
     sortName: "btnDefSortByName", sortRegion: "btnDefSortByRegion", sortRecent: "btnDefSortByRecent"
   };
+  // 지적사항 화면의 "등록된 거래처" 목록은 사용자 요청으로 제거됨(2026-09-28) - 화면에
+  // 목록 요소가 없으므로 그리지 않는다. 등록된 데이터 자체는 그대로 남아 있다.
   function renderDeficiencyHub() {
+    if (!$("#" + DEF_HUB_IDS.list)) return Promise.resolve();
     return renderSiteStatusHub(defHubState, DEF_HUB_IDS, openSiteRounds);
   }
-  wireSiteStatusHubToolbar(defHubState, DEF_HUB_IDS, openSiteRounds);
+  if ($("#" + DEF_HUB_IDS.list)) wireSiteStatusHubToolbar(defHubState, DEF_HUB_IDS, openSiteRounds);
 
   // 회차 도입 전(2026-08-22 이전)에 만들어진 지적사항은 roundId가 아예 없다 - 그런 현장을 처음
   // 열 때 딱 한 번, 그 기존 지적사항 전체를 회차 하나로 묶어준다(가장 이른 생성일을 회차 날짜로

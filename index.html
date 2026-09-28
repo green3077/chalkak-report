@@ -141,6 +141,7 @@
       <div id="importSummary" class="hint-text hidden"></div>
       <div class="field"><span>대상물명칭(상호) *</span><input type="text" id="siteName" placeholder="예: 그린빌딩"></div>
       <div class="field"><span>대상물 구분</span><input type="text" id="siteBuildingType" placeholder="예: 근린생활시설"></div>
+      <div class="field"><span>소재지</span><input type="text" id="siteAddress" placeholder="예: 서울시 강남구 ..."></div>
       <div class="field-row">
         <div class="field"><span>관계인 성명</span><input type="text" id="siteContactName"></div>
         <div class="field"><span>관계인 전화번호</span><input type="text" id="siteContactPhone" placeholder="010-0000-0000"></div>
@@ -149,7 +150,6 @@
         <div class="field"><span>소방안전관리자 성명</span><input type="text" id="siteFireManagerName"></div>
         <div class="field"><span>소방안전관리자 전화번호</span><input type="text" id="siteFireManagerPhone" placeholder="010-0000-0000"></div>
       </div>
-      <div class="field"><span>소재지</span><input type="text" id="siteAddress" placeholder="예: 서울시 강남구 ..."></div>
       <input type="text" id="siteFireStation" class="hidden">
       <input type="text" id="siteStation119" class="hidden">
 
@@ -162,23 +162,10 @@
   <section id="screen-deficiency-hub" class="screen">
     <div class="card">
       <h2>지적사항 / 이행완료 관리</h2>
-      <div class="hint-text">직접 입력하거나 자료를 올려서 새 거래처를 등록하고, 현장(업체)을 선택하면 그 현장의 지적사항을 한곳에서 관리할 수 있습니다.</div>
+      <div class="hint-text">직접 입력하거나 자료를 올려서 거래처를 등록하면 그 현장의 지적사항을 한곳에서 관리할 수 있습니다.</div>
     </div>
     <button class="btn btn-primary btn-large" id="btnEntryManual">✏️ 직접 입력</button>
     <button class="btn btn-secondary btn-large" id="btnEntryImport">📎 업체 자료 올리기</button>
-    <h2 class="list-heading">등록된 거래처</h2>
-    <div class="sort-toolbar">
-      <button class="sort-btn active" id="btnDefSortByName">가나다순</button>
-      <button class="sort-btn" id="btnDefSortByRecent">최신순</button>
-      <button class="sort-btn" id="btnDefSortByRegion">지역별</button>
-    </div>
-    <div class="filter-toolbar" id="defFilterToolbar">
-      <button type="button" class="filter-chip" data-filter="pending">검토중</button>
-      <button type="button" class="filter-chip" data-filter="none">지적사항 없음</button>
-      <button type="button" class="filter-chip" data-filter="open">미해결</button>
-      <button type="button" class="filter-chip" data-filter="resolved">해결</button>
-    </div>
-    <div id="deficiencyHubList"></div>
   </section>
 
   <!-- 보고서 모아보기 -->
