@@ -90,7 +90,7 @@ const HwpxExport = (() => {
         if (count === (occurrence || 0)) {
           const run = t.parentNode;
           const newRun = run.cloneNode(true);
-          newRun.getElementsByTagNameNS(HP, "t")[0].textContent = "   " + value;
+          newRun.getElementsByTagNameNS(HP, "t")[0].textContent = " " + value;
           run.parentNode.insertBefore(newRun, run.nextSibling);
           return true;
         }
@@ -591,7 +591,9 @@ const HwpxExport = (() => {
 
       const locationText = [def.floor, def.location].filter(Boolean).join(" ") || `${i + 1}번 항목`;
       const lines = [{ text: locationText, charPrIDRef: boldContentCharPrId }];
-      lines.push(def.description || "");
+      // 엑셀/PDF에서 가져온 내용에 섞인 줄바꿈("탬퍼스위치 기구 불량\n(집게식,125A)")을 공백 한 칸으로
+      // 합쳐 한 문단으로 이어지게 한다(사용자 요청, 2026-09-29).
+      lines.push((def.description || "").replace(/\s*[\r\n]+\s*/g, " ").trim());
       clearCellAndSetLines(contentTc, lines, "47");
 
       // photoMap은 app.js에서 FireDB.getPhotosBySite() 결과(+구글 드라이브에서 보충한 것)를 id 기준으로
