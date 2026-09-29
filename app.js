@@ -194,9 +194,11 @@
     return `${d.getFullYear()}-${m}-${day}`;
   }
 
-  // "01031308364" 처럼 하이픈 없이 저장된 옛날 데이터도 화면에는 "010-3130-8364"처럼 보이도록 표시용으로 포맷.
-  // 이미 하이픈이 있거나 형식을 알 수 없는 값은 원본 그대로 둔다(잘못 자르지 않기 위해).
+  // "01031308364" 처럼 하이픈 없이 입력/저장된 번호를 11자리는 000-0000-0000, 10자리는 000-000-0000
+  // (서울 02는 02-0000-0000)으로 포맷. 사용자가 하이픈(-)을 직접 넣은 값은 그대로 둔다(사용자 요청,
+  // 2026-09-29). 형식을 알 수 없는 값도 원본 그대로 둔다(잘못 자르지 않기 위해).
   function formatPhone(raw) {
+    if ((raw || "").includes("-")) return raw;
     const digits = (raw || "").replace(/[^0-9]/g, "");
     if (!digits) return raw || "";
     if (digits.length === 11) return digits.replace(/(\d{3})(\d{4})(\d{4})/, "$1-$2-$3");
@@ -1065,9 +1067,14 @@
     "siteFireManagerName", "siteFireManagerPhone", "siteAddress"
   ];
 
+  // 전화번호 칸은 입력을 마치고 칸을 벗어나면 바로 하이픈 형식으로 바꿔 보여준다.
+  ["siteContactPhone", "siteFireManagerPhone"].forEach((id) => {
+    $("#" + id).addEventListener("blur", (e) => { e.target.value = formatPhone(e.target.value.trim()); });
+  });
+
   function openBlankSiteForm() {
     editingSiteId = null;
-    $("#siteFormTitle").textContent = "거래처 추가";
+    $("#siteFormTitle").textContent = "거래처 정보";
     SITE_FORM_FIELDS.forEach((id) => { $("#" + id).value = ""; });
     $("#siteFireStation").value = "";
     $("#siteStation119").value = "";
@@ -1142,7 +1149,7 @@
       };
       let filledCount = 0;
       Object.entries(map).forEach(([field, id]) => {
-        if (result.fields[field]) { $("#" + id).value = result.fields[field]; filledCount++; }
+        if (result.fields[field]) { $("#" + id).value = id.endsWith("Phone") ? formatPhone(result.fields[field]) : result.fields[field]; filledCount++; }
       });
       $("#importSummary").classList.remove("hidden");
       $("#importSummary").textContent = `${result.typeLabel}에서 ${filledCount}개 항목을 자동으로 채웠습니다.${result.lowConfidence ? " 인식 품질이 낮을 수 있으니 내용을 꼭 확인해주세요." : " 내용을 확인 후 저장해주세요."}`;
@@ -1195,12 +1202,12 @@
       // 관계인/소방안전관리자 성명은 "이 홍 기"처럼 띄어쓰기가 섞여 입력돼도 항상 붙여서
       // 저장한다(사용자 요청, 2026-09-07).
       contactName: $("#siteContactName").value.replace(/\s+/g, ""),
-      contactPhone: $("#siteContactPhone").value.trim(),
+      contactPhone: formatPhone($("#siteContactPhone").value.trim()),
       fireStation: $("#siteFireStation").value.trim(),
       station119: $("#siteStation119").value.trim(),
       buildingType: $("#siteBuildingType").value.trim(),
       fireManagerName: $("#siteFireManagerName").value.replace(/\s+/g, ""),
-      fireManagerPhone: $("#siteFireManagerPhone").value.trim()
+      fireManagerPhone: formatPhone($("#siteFireManagerPhone").value.trim())
     };
     if (editingSiteId) {
       await FireDB.updateSite(editingSiteId, data);
